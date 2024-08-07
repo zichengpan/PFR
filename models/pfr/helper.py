@@ -3,15 +3,16 @@ from tqdm import tqdm
 import torch.nn.functional as F
 import torch_dct as dct
 
-def base_train(model, trainloader, optimizer, scheduler, epoch, args, criterion, group=4, rank=6):
+def base_train(model, trainloader, trainloader_aux, optimizer, scheduler, epoch, args, criterion, group=4, rank=6):
     tl = Averager()
     ta = Averager()
     model = model.train()
     tqdm_gen = tqdm(trainloader)
 
-    for i, (data, train_label) in enumerate(tqdm_gen, 1):
+    for i, ((data, train_label), (data_aux, train_labels_aux)) in enumerate(zip(tqdm_gen, trainloader_aux), 1):
 
         data, train_label = data.cuda(), train_label.cuda()
+        data_aux, train_labels_aux = data_aux.cuda(), train_labels_aux.cuda()
 
         X1 = dct.dct(data[:, 0, :, :])
         X2 = dct.dct(data[:, 1, :, :])
@@ -41,6 +42,7 @@ def base_train(model, trainloader, optimizer, scheduler, epoch, args, criterion,
         y_high = torch.cat((y_high1.unsqueeze(1), y_high2.unsqueeze(1), y_high3.unsqueeze(1)), dim=1)
 
         logits_ori, raw = model(data)
+        logits, _ = model(data_aux)
         logits_low, raw_low = model(y_low)
         logits_high, raw_high = model(y_high)
 
@@ -92,8 +94,8 @@ def base_train(model, trainloader, optimizer, scheduler, epoch, args, criterion,
 
         # =========================== Cross-Entropy ==================================
 
-        logits_ = logits_ori[:, :args.base_class]
-        ce_loss = F.cross_entropy(logits_, train_label)
+        logits_ = logits[:, :args.base_class]
+        ce_loss = F.cross_entropy(logits_, train_labels_aux)
 
         total_loss = args.alpha*dis_loss + (1-args.alpha)*ce_loss + args.alpha*tri_loss
 
