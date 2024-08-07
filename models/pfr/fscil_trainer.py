@@ -15,14 +15,14 @@ class FSCILTrainer(Trainer):
         self.set_save_path()
 
     def set_up_model(self):
-        self.model = MYNET(self.args)
+        self.model = MYNET(self.args, mode=self.args.base_mode)
         self.model = nn.DataParallel(self.model, list(range(self.args.num_gpu)))
         self.model = self.model.cuda()
-        
+
         if self.args.model_dir is not None:
             logging.info('Loading init parameters from: %s' % self.args.model_dir)
-            self.best_model_dict = torch.load(self.args.model_dir, 
-                                              map_location={'cuda:3':'cuda:0'})['params']
+            self.best_model_dict = torch.load(self.args.model_dir,
+                                              map_location={'cuda:3': 'cuda:0'})['params']
         else:
             logging.info('random init params')
             if self.args.start_session > 0:
@@ -45,18 +45,17 @@ class FSCILTrainer(Trainer):
         rank = args.rank
 
         criterion = nn.NLLLoss().cuda()
-
         for session in range(args.start_session, args.sessions):
             train_set, trainloader, testloader = self.get_dataloader(session, group)
             self.model.load_state_dict(self.best_model_dict)
+
             if session == 0:  # load base class train img label
-                train_set, trainloader_aux, testloader = get_base_dataloader(self.args)
                 logging.info(f'new classes for this session:{np.unique(train_set.targets)}')
                 optimizer, scheduler = get_optimizer(args, self.model)
                 for epoch in range(args.epochs_base):
                     start_time = time.time()
 
-                    tl, ta = base_train(self.model, trainloader, trainloader_aux, optimizer, scheduler, epoch, args,
+                    tl, ta = base_train(self.model, trainloader, optimizer, scheduler, epoch, args,
                                         criterion, group, rank)
                     tsl, tsa = test(self.model, testloader, epoch, args, session)
 
@@ -69,12 +68,8 @@ class FSCILTrainer(Trainer):
                         self.best_model_dict = deepcopy(self.model.state_dict())
                         logging.info('********A better model is found!!**********')
                         logging.info('Saving model to :%s' % save_model_dir)
-
                     logging.info('best epoch {}, best test acc={:.3f}'.format(
                         self.trlog['max_acc_epoch'], self.trlog['max_acc'][session]))
-
-                    print('best epoch {}, best test acc={:.3f}'.format(self.trlog['max_acc_epoch'],
-                                                                       self.trlog['max_acc'][session]))
 
                     self.trlog['train_loss'].append(tl)
                     self.trlog['train_acc'].append(ta)
@@ -86,8 +81,8 @@ class FSCILTrainer(Trainer):
                         'epoch:%03d,lr:%.4f,training_loss:%.5f,training_acc:%.5f,test_loss:%.5f,test_acc:%.5f' % (
                             epoch, lrc, tl, ta, tsl, tsa))
                     print('This epoch takes %d seconds' % (time.time() - start_time),
-                        '\n still need around %.2f mins to finish this session' % (
-                                (time.time() - start_time) * (args.epochs_base - epoch) / 60))
+                          '\n still need around %.2f mins to finish this session' % (
+                                  (time.time() - start_time) * (args.epochs_base - epoch) / 60))
                     scheduler.step()
 
                 # Finish base train
@@ -109,14 +104,14 @@ class FSCILTrainer(Trainer):
                         self.trlog['max_acc'][session] = float('%.3f' % (tsa * 100))
                         logging.info('The new best test acc of base session={:.3f}'.format(
                             self.trlog['max_acc'][session]))
-            
+
             # incremental learning sessions
-            else:  
+            else:
                 logging.info("training session: [%d]" % session)
                 self.model.module.mode = self.args.new_mode
                 self.model.eval()
                 trainloader.dataset.transform = testloader.dataset.transform
-                
+
                 self.model.module.update_fc(trainloader, np.unique(train_set.targets), session)
 
                 tsl, avgac = test(self.model, testloader, 0, args, session)
@@ -124,15 +119,20 @@ class FSCILTrainer(Trainer):
                 # update results and save model
                 self.trlog['max_acc'][session] = float('%.3f' % (avgac * 100))
                 self.best_model_dict = deepcopy(self.model.state_dict())
-                
+
                 logging.info(f"Avg Acc:{self.trlog['max_acc'][session]}")
                 result_list.append('Session {}, test Acc {:.3f}\n'.format(session, self.trlog['max_acc'][session]))
-        
+
+        # Finish all incremental sessions, save results.
+        # result_list, hmeans = postprocess_results(result_list, self.trlog)
+        # save_list_to_txt(os.path.join(args.save_path, 'results.txt'), result_list)
+        # if not self.args.debug:
+        #     save_result(args, self.trlog, hmeans)
+
         t_end_time = time.time()
         total_time = (t_end_time - t_start_time) / 60
         logging.info(f"Base Session Best epoch:{self.trlog['max_acc_epoch']}")
         logging.info('Total time used %.2f mins' % total_time)
-
 
     def set_save_path(self):
         mode = self.args.base_mode + '-' + self.args.new_mode
