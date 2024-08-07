@@ -13,7 +13,7 @@ Few-shot class-incremental learning was introduced to solve the model adaptation
 Follow the guidelines provided in the [CEC](https://github.com/icoz69/CEC-CVPR2021) to download and prepare the CUB200 dataset.
 
 ### StanfordCar, StanfordDog, and Aircraft Datasets:
-Download the [StanfordCar](https://www.kaggle.com/datasets/jessicali9530/stanford-cars-dataset), [StanfordDog](http://vision.stanford.edu/aditya86/ImageNetDogs/), and [Aircraft](https://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/) datasets. Organize the datasets according to the structure required for incremental learning as outlined below:
+Download the [StanfordCar](https://drive.google.com/file/d/1D4nRtLncTvOHqazMe8gV9Pnz9sR0CmFS/view?usp=sharing), [StanfordDog](http://vision.stanford.edu/aditya86/ImageNetDogs/), and [Aircraft](https://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/) datasets. Organize the datasets according to the structure required for incremental learning as outlined below:
 
 ```
 data
